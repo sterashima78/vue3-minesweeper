@@ -23,7 +23,7 @@ jobs:
           restore-keys: |
             npm-v1-
       - run: npm ci
-      - run: npm run build:all
+      - run: npm run build
       - name: Deploy
         if: success()
         uses: crazy-max/ghaction-github-pages@v1
