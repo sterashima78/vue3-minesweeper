@@ -5,13 +5,13 @@
     v-text="contents"
     @click.left="open"
     @click.right="change"
-    @click.middle="aroundOpen"
+    @click.middle="openAround"
     oncontextmenu="return false;"
   />
 </template>
 <script lang="ts">
 import { defineComponent, PropType, computed } from "vue";
-import { CellState, CellType, isNotOpen, isHavingMine } from "@/domain/";
+import { CellState, CellType } from "@/domain/";
 
 export default defineComponent({
   props: {
@@ -59,10 +59,10 @@ export default defineComponent({
 <style lang="scss" scoped>
 .cell-area {
   border: 1px solid black;
-  border-collapse: collapse;
-  line-height: 2em;
-  width: 2em;
-  height: 2em;
+  box-sizing: border-box;
+  line-height: 1.5em;
+  width: 1.5em;
+  height: 1.5em;
   background: #eee;
   text-align: center;
   vertical-align: middle;

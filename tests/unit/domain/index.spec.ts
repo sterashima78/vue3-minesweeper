@@ -1,4 +1,13 @@
-import { initialize, setMine, setHavingMine, MineField } from "@/domain";
+import {
+  initialize,
+  setMine,
+  setHavingMine,
+  MineField,
+  MineSetsFieldCell,
+  toGameState,
+  openCell,
+  openAround
+} from "@/domain";
 describe("domain", () => {
   describe("initialize", () => {
     test("入力で指定した次元の行列で、unknown, has0 で初期化される", () => {
@@ -18,14 +27,14 @@ describe("domain", () => {
   describe("setMine", () => {
     test.each([
       [
-        10,
-        10,
+        2,
+        2,
         [
-          [1, 1],
-          [1, 2]
+          [0, 1],
+          [0, 0]
         ],
-        5,
-        5
+        2,
+        2
       ],
       [10, 8, [], 100, 79],
       [10, 8, [], 80, 79],
@@ -35,7 +44,7 @@ describe("domain", () => {
       "%s行 %s列 の配列に %o 以外のマスに %s 指定されたときは %s 個の地雷が埋まっている",
       (row, col, except, request, mineNum) => {
         const field = initialize(row, col);
-        const d = setMine(field, except as [number, number][], request);
+        const d = setMine(except as [number, number][], request)(field);
         expect(d).toHaveLength(row);
         d.forEach(ele => expect(ele).toHaveLength(col));
         const num = d.reduce(
@@ -68,11 +77,217 @@ describe("domain", () => {
       ];
       const before = _before.map(i =>
         i.map(cell => ({ cell, state: "unknown" }))
-      ) as MineField;
+      ) as MineSetsFieldCell[][];
       const answer = _answer.map(i =>
         i.map(cell => ({ cell, state: "unknown" }))
       );
       expect(setHavingMine(before)).toEqual(answer);
+    });
+  });
+
+  describe("toGameState", () => {
+    test("Game", () => {
+      expect(
+        toGameState([
+          [
+            { cell: "mine", state: "unknown" },
+            { cell: "has1", state: "unknown" }
+          ],
+          [
+            { cell: "has1", state: "unknown" },
+            { cell: "has1", state: "open" }
+          ]
+        ])
+      ).toBe("Game");
+    });
+    test("GameOver", () => {
+      expect(
+        toGameState([
+          [
+            { cell: "mine", state: "open" },
+            { cell: "has1", state: "unknown" }
+          ],
+          [
+            { cell: "has1", state: "unknown" },
+            { cell: "has1", state: "open" }
+          ]
+        ])
+      ).toBe("GameOver");
+    });
+    test("GameClear", () => {
+      expect(
+        toGameState([
+          [
+            { cell: "mine", state: "question" },
+            { cell: "has1", state: "open" }
+          ],
+          [
+            { cell: "has1", state: "open" },
+            { cell: "has1", state: "open" }
+          ]
+        ])
+      ).toBe("GameClear");
+    });
+  });
+
+  describe("openCell", () => {
+    let field: MineField = [];
+    beforeEach(() => {
+      field = [
+        [
+          { cell: "mine", state: "unknown" },
+          { cell: "has1", state: "unknown" },
+          { cell: "has0", state: "unknown" }
+        ],
+        [
+          { cell: "has1", state: "unknown" },
+          { cell: "has1", state: "unknown" },
+          { cell: "has0", state: "unknown" }
+        ],
+        [
+          { cell: "has0", state: "unknown" },
+          { cell: "has0", state: "unknown" },
+          { cell: "has0", state: "unknown" }
+        ]
+      ];
+    });
+    test("hasMine", () => {
+      expect(openCell(field, 0, 1)).toEqual([
+        [
+          { cell: "mine", state: "unknown" },
+          { cell: "has1", state: "open" },
+          { cell: "has0", state: "unknown" }
+        ],
+        [
+          { cell: "has1", state: "unknown" },
+          { cell: "has1", state: "unknown" },
+          { cell: "has0", state: "unknown" }
+        ],
+        [
+          { cell: "has0", state: "unknown" },
+          { cell: "has0", state: "unknown" },
+          { cell: "has0", state: "unknown" }
+        ]
+      ]);
+    });
+    test("hasNoMine", () => {
+      expect(openCell(field, 0, 2)).toEqual([
+        [
+          { cell: "mine", state: "unknown" },
+          { cell: "has1", state: "open" },
+          { cell: "has0", state: "open" }
+        ],
+        [
+          { cell: "has1", state: "open" },
+          { cell: "has1", state: "open" },
+          { cell: "has0", state: "open" }
+        ],
+        [
+          { cell: "has0", state: "open" },
+          { cell: "has0", state: "open" },
+          { cell: "has0", state: "open" }
+        ]
+      ]);
+    });
+    test("isMine", () => {
+      expect(openCell(field, 0, 0)).toEqual([
+        [
+          { cell: "mine", state: "open" },
+          { cell: "has1", state: "open" },
+          { cell: "has0", state: "open" }
+        ],
+        [
+          { cell: "has1", state: "open" },
+          { cell: "has1", state: "open" },
+          { cell: "has0", state: "open" }
+        ],
+        [
+          { cell: "has0", state: "open" },
+          { cell: "has0", state: "open" },
+          { cell: "has0", state: "open" }
+        ]
+      ]);
+    });
+  });
+  describe("openAround", () => {
+    let field: any[][] = [];
+    beforeEach(() => {
+      field = [
+        [
+          { cell: "mine", state: "unknown" },
+          { cell: "has1", state: "unknown" },
+          { cell: "has0", state: "unknown" }
+        ],
+        [
+          { cell: "has1", state: "unknown" },
+          { cell: "has1", state: "open" },
+          { cell: "has0", state: "unknown" }
+        ],
+        [
+          { cell: "has0", state: "unknown" },
+          { cell: "has0", state: "unknown" },
+          { cell: "has0", state: "unknown" }
+        ]
+      ];
+    });
+    test("open collect", () => {
+      field[0][0].state = "flag";
+      expect(openAround(field, 1, 1)).toEqual([
+        [
+          { cell: "mine", state: "flag" },
+          { cell: "has1", state: "open" },
+          { cell: "has0", state: "open" }
+        ],
+        [
+          { cell: "has1", state: "open" },
+          { cell: "has1", state: "open" },
+          { cell: "has0", state: "open" }
+        ],
+        [
+          { cell: "has0", state: "open" },
+          { cell: "has0", state: "open" },
+          { cell: "has0", state: "open" }
+        ]
+      ]);
+    });
+    test("open incollect", () => {
+      field[0][1].state = "flag";
+      expect(openAround(field, 1, 1)).toEqual([
+        [
+          { cell: "mine", state: "open" },
+          { cell: "has1", state: "open" },
+          { cell: "has0", state: "open" }
+        ],
+        [
+          { cell: "has1", state: "open" },
+          { cell: "has1", state: "open" },
+          { cell: "has0", state: "open" }
+        ],
+        [
+          { cell: "has0", state: "open" },
+          { cell: "has0", state: "open" },
+          { cell: "has0", state: "open" }
+        ]
+      ]);
+    });
+    test("no flag", () => {
+      expect(openAround(field, 1, 1)).toEqual([
+        [
+          { cell: "mine", state: "unknown" },
+          { cell: "has1", state: "unknown" },
+          { cell: "has0", state: "unknown" }
+        ],
+        [
+          { cell: "has1", state: "unknown" },
+          { cell: "has1", state: "open" },
+          { cell: "has0", state: "unknown" }
+        ],
+        [
+          { cell: "has0", state: "unknown" },
+          { cell: "has0", state: "unknown" },
+          { cell: "has0", state: "unknown" }
+        ]
+      ]);
     });
   });
 });

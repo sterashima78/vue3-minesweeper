@@ -1,3 +1,15 @@
+import { flow } from "fp-ts/lib/function";
+import { range, map, chunksOf } from "fp-ts/lib/Array";
+import { pipe } from "fp-ts/lib/pipeable";
+import {
+  some,
+  fromNullable,
+  map as mapOption,
+  flatten as flattenOption,
+  none,
+  getOrElse
+} from "fp-ts/lib/Option";
+
 export type CellDisplayType = CellState | CellType;
 /**
  * ユーザから見た状態
@@ -36,84 +48,229 @@ export type CellHasMine =
  */
 export type CellHasNoMine = "has0";
 
-export type MineFieldCell = {
+/**
+ * フィールドの各マス
+ */
+export type MineFieldCell = Readonly<{
   cell: CellIsMine | CellIsNotMine;
   state: CellState;
+}>;
+
+/**
+ * 初期化時のフィールドの各マス
+ */
+export type InitFieldCell = {
+  cell: CellHasNoMine;
+  state: "unknown";
 };
 
-export type MineField = MineFieldCell[][];
+/**
+ * 地雷セット時のフィールドの各マス
+ */
+export type MineSetsFieldCell = {
+  cell: CellHasNoMine | CellIsMine;
+  state: "unknown";
+};
 
-export const isMine = (cell: CellDisplayType): cell is CellIsMine =>
-  cell === "mine";
+export type MineField = ReadonlyArray<ReadonlyArray<MineFieldCell>>;
 
-export const isNotOpen = (cell: CellDisplayType): cell is CellState =>
-  cell === "unknown" || cell === "flag" || cell === "question" || isMine(cell);
+export type GameState = "Game" | "GameOver" | "GameClear";
 
-export const isHavingMine = (cell: CellDisplayType): cell is CellHasMine =>
-  !isNotOpen(cell) && cell !== "has0";
-
-export const range = (num: number) => Array.from({ length: num }, (_, i) => i);
-
-export const initialize = (row: number, col: number): MineField =>
-  range(row).map(() =>
-    range(col).map(() => ({
-      cell: "has0",
-      state: "unknown"
-    }))
-  );
-
+/**
+ * 乱数生成
+ */
 const getRandInt = (max: number) => Math.floor(Math.random() * max);
 
-const countMine = (field: MineField) =>
-  field.reduce(
-    (sum, ele) =>
-      sum + ele.reduce((s, x) => s + (x.cell === "mine" ? 1 : 0), 0),
-    0
+/**
+ * 初期化
+ */
+export const initialize = (row: number, col: number): InitFieldCell[][] =>
+  pipe(
+    range(1, row * col),
+    map((): InitFieldCell => ({ cell: "has0", state: "unknown" })),
+    chunksOf(col)
   );
 
-export const setMine = (
-  field: MineField,
-  except: [number, number][],
-  mine: number
-): MineField => {
-  const size = field.length * field[0].length;
+/**
+ * 地雷判定
+ */
+export const isMine = (cell: CellDisplayType) => cell === "mine";
+
+/**
+ * 行の地雷の数を数える
+ */
+const countMineRow = (cells: ReadonlyArray<MineFieldCell>) =>
+  cells.reduce((sum, cell) => sum + (isMine(cell.cell) ? 1 : 0), 0);
+
+/**
+ * 地雷の数を数える
+ */
+const countMine = (field: MineField) =>
+  field.reduce((sum, row) => sum + countMineRow(row), 0);
+
+/**
+ * 地雷を埋めたフィールドを返す関数を作る
+ * @param except 地雷を埋めない場所
+ * @param mine 地雷の数
+ */
+export const setMine = (except: [number, number][], mine: number) => (
+  field: InitFieldCell[][]
+): MineSetsFieldCell[][] => {
+  const copyField: MineSetsFieldCell[][] = field;
+  const size = copyField.length * copyField[0].length;
   const mineNum = mine === 0 ? 1 : mine >= size ? size - 1 : mine;
   let currentMine = 0;
   while (mineNum > currentMine) {
-    const row = getRandInt(field.length);
-    const col = getRandInt(field[0].length);
-    const cell = field[row][col];
+    const row = getRandInt(copyField.length);
+    const col = getRandInt(copyField[0].length);
+    if (except.find(([r, c]) => r === row && c === col)) continue;
+    const cell = copyField[row][col];
     cell.cell = "mine";
-    currentMine = countMine(field);
+    currentMine = countMine(copyField);
   }
-  return field;
+  return copyField;
 };
 
-export const setHavingMine = (field: MineField): MineField =>
-  field.map((row, rIndex, f) =>
-    row.map(({ cell, state }, cIndex, col) => {
-      let count = 0;
-      if (cell === "mine") return { cell, state };
-      // before line
-      if (rIndex > 0 && cIndex > 0)
-        count += f[rIndex - 1][cIndex - 1].cell === "mine" ? 1 : 0;
-      if (rIndex > 0) count += f[rIndex - 1][cIndex].cell === "mine" ? 1 : 0;
-      if (rIndex > 0 && cIndex < col.length - 1)
-        count += f[rIndex - 1][cIndex + 1].cell === "mine" ? 1 : 0;
-      // current line
-      if (cIndex > 0) count += f[rIndex][cIndex - 1].cell === "mine" ? 1 : 0;
-      if (cIndex < col.length - 1)
-        count += f[rIndex][cIndex + 1].cell === "mine" ? 1 : 0;
-      // next line
-      if (rIndex < field.length - 1 && cIndex > 0)
-        count += f[rIndex + 1][cIndex - 1].cell === "mine" ? 1 : 0;
-      if (rIndex < field.length - 1)
-        count += f[rIndex + 1][cIndex].cell === "mine" ? 1 : 0;
-      if (rIndex < field.length - 1 && cIndex < col.length - 1)
-        count += f[rIndex + 1][cIndex + 1].cell === "mine" ? 1 : 0;
-      return {
-        cell: `has${count}`,
-        state
-      } as MineFieldCell;
-    })
+/**
+ * 周囲の地雷情報をセットする
+ * @param field 地雷が埋まったフィールド
+ */
+export const setHavingMine = (field: MineSetsFieldCell[][]): MineField =>
+  field.map((row, rIndex) =>
+    row.map(({ cell, state }, cIndex) =>
+      cell === "mine"
+        ? { cell, state }
+        : ({
+            cell: `has${getAroundCell(field, rIndex, cIndex).reduce(
+              (sum, [r, c]) => sum + (field[r][c].cell === "mine" ? 1 : 0),
+              0
+            )}`,
+            state
+          } as MineFieldCell)
+    )
+  );
+
+/**
+ * ゲームの初期化
+ * @param except 地雷を埋めない場所
+ * @param mineNum 地雷の数
+ */
+export const initializerFactory = (
+  except: [number, number][],
+  mineNum: number
+) => flow(initialize, setMine(except, mineNum), setHavingMine);
+
+const doseCellHaveMine = (cell: MineFieldCell) =>
+  cell.cell !== "has0" && cell.cell !== "mine";
+const isMineCell = (cell: MineFieldCell) => isMine(cell.cell);
+const openTheCell = (f: MineField, row: number, col: number): MineField =>
+  affect(row, col, { cell: f[row][col].cell, state: "open" })(f);
+const allOpen = (f: MineField): MineField =>
+  f.map(r => r.map(c => ({ state: "open", cell: c.cell })));
+const openRecursive = (row: number, col: number) => (f: MineField): MineField =>
+  getAroundCell(f, row, col).reduce((field, [r, c]): MineField => {
+    if (field[r][c].state === "open") return field;
+    return openCell(field, r, c);
+  }, f);
+
+export const openCell = (
+  field: MineField,
+  row: number,
+  col: number
+): MineField =>
+  pipe(
+    fromNullable(field),
+    mapOption(f => f[row]),
+    mapOption(r => r[col]),
+    mapOption(c => {
+      if (doseCellHaveMine(c)) return some(openTheCell(field, row, col));
+      if (isMineCell(c)) return some(allOpen(field));
+      if (c.cell === "has0")
+        return pipe(
+          openTheCell(field, row, col),
+          openRecursive(row, col),
+          some
+        );
+      return none;
+    }),
+    flattenOption,
+    getOrElse(() => field)
+  );
+
+export const toGameState = (field: MineField): GameState =>
+  field.flat().reduce((state: GameState, cell) => {
+    if (state === "GameOver") return state;
+    if (cell.cell === "mine" && cell.state === "open") return "GameOver";
+    if (cell.cell !== "mine" && cell.state !== "open") return "Game";
+    return state;
+  }, "GameClear");
+
+export const changeState = (field: MineField, row: number, col: number) =>
+  pipe(
+    fromNullable(field),
+    mapOption(f => f[row]),
+    mapOption(r => r[col]),
+    mapOption(cell => {
+      if (cell.state === "unknown")
+        return pipe(
+          field,
+          affect(row, col, { ...field[row][col], state: "flag" }),
+          some
+        );
+      if (cell.state === "flag")
+        return pipe(
+          field,
+          affect(row, col, { ...field[row][col], state: "question" }),
+          some
+        );
+      if (cell.state === "question")
+        return pipe(
+          field,
+          affect(row, col, { ...field[row][col], state: "unknown" }),
+          some
+        );
+      return none;
+    }),
+    flattenOption,
+    getOrElse(() => field)
+  );
+
+const affect = (row: number, col: number, value: MineFieldCell) => (
+  field: MineField
+): MineField =>
+  field.map((r, rIndex) =>
+    r.map((cell, cIndex) => (rIndex === row && cIndex === col ? value : cell))
+  );
+
+export const openAround = (field: MineField, row: number, col: number) => {
+  if (!field[row] || !field[row][col]) return field;
+  if (field[row][col].state !== "open") return field;
+  if (field[row][col].cell === "has0" || field[row][col].cell === "mine")
+    return field;
+  const coords = getAroundCell(field, row, col);
+  const flags = coords.filter(
+    coord => field[coord[0]][coord[1]].state === "flag"
+  ).length;
+  if (field[row][col].cell !== `has${flags}`) return field;
+  return coords.reduce(
+    (f, [r, c]) =>
+      f[r][c].state === "flag" && f[r][c].cell === "mine"
+        ? f
+        : openCell(f, r, c),
+    field
+  );
+};
+
+export const getAroundCell = (field: MineField, row: number, col: number) =>
+  [
+    [row - 1, col - 1],
+    [row - 1, col],
+    [row - 1, col + 1],
+    [row, col - 1],
+    [row, col + 1],
+    [row + 1, col - 1],
+    [row + 1, col],
+    [row + 1, col + 1]
+  ].filter(
+    ([r, c]) => !(r < 0 || field.length <= r || c < 0 || field[0].length <= c)
   );
