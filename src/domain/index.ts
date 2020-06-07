@@ -160,19 +160,41 @@ export const initializerFactory = (
   mineNum: number
 ) => flow(initialize, setMine(except, mineNum), setHavingMine);
 
+/**
+ * 周囲に地雷があるか判定
+ */
 const doseCellHaveMine = (cell: MineFieldCell) =>
   cell.cell !== "has0" && cell.cell !== "mine";
+
+/**
+ * 対象マスが地雷かどうか判定
+ */
 const isMineCell = (cell: MineFieldCell) => isMine(cell.cell);
+
+/**
+ * 対象マスをオープンする
+ */
 const openTheCell = (f: MineField, row: number, col: number): MineField =>
-  affect(row, col, { cell: f[row][col].cell, state: "open" })(f);
+  modifyAt(row, col, { cell: f[row][col].cell, state: "open" })(f);
+
+/**
+ * 全マスをオープンする
+ */
 const allOpen = (f: MineField): MineField =>
   f.map(r => r.map(c => ({ state: "open", cell: c.cell })));
+
+/**
+ * 地雷情報が得られるまでオープンする
+ */
 const openRecursive = (row: number, col: number) => (f: MineField): MineField =>
   getAroundCell(f, row, col).reduce((field, [r, c]): MineField => {
     if (field[r][c].state === "open") return field;
     return openCell(field, r, c);
   }, f);
 
+/**
+ * 対象マスをオープン
+ */
 export const openCell = (
   field: MineField,
   row: number,
@@ -197,6 +219,9 @@ export const openCell = (
     getOrElse(() => field)
   );
 
+/**
+ * ゲームの状態を取得
+ */
 export const toGameState = (field: MineField): GameState =>
   field.flat().reduce((state: GameState, cell) => {
     if (state === "GameOver") return state;
@@ -205,6 +230,9 @@ export const toGameState = (field: MineField): GameState =>
     return state;
   }, "GameClear");
 
+/**
+ * マスの状態を変更
+ */
 export const changeState = (field: MineField, row: number, col: number) =>
   pipe(
     fromNullable(field),
@@ -214,19 +242,19 @@ export const changeState = (field: MineField, row: number, col: number) =>
       if (cell.state === "unknown")
         return pipe(
           field,
-          affect(row, col, { ...field[row][col], state: "flag" }),
+          modifyAt(row, col, { ...field[row][col], state: "flag" }),
           some
         );
       if (cell.state === "flag")
         return pipe(
           field,
-          affect(row, col, { ...field[row][col], state: "question" }),
+          modifyAt(row, col, { ...field[row][col], state: "question" }),
           some
         );
       if (cell.state === "question")
         return pipe(
           field,
-          affect(row, col, { ...field[row][col], state: "unknown" }),
+          modifyAt(row, col, { ...field[row][col], state: "unknown" }),
           some
         );
       return none;
@@ -235,13 +263,21 @@ export const changeState = (field: MineField, row: number, col: number) =>
     getOrElse(() => field)
   );
 
-const affect = (row: number, col: number, value: MineFieldCell) => (
+/**
+ * 対象マスを更新した新しい状態を返す
+ */
+const modifyAt = (row: number, col: number, value: MineFieldCell) => (
   field: MineField
 ): MineField =>
   field.map((r, rIndex) =>
-    r.map((cell, cIndex) => (rIndex === row && cIndex === col ? value : cell))
+    r.map((cell, cIndex) =>
+      rIndex === row && cIndex === col ? value : { ...cell }
+    )
   );
 
+/**
+ * 期待値分 flag が立ってるマスの周囲をオープン
+ */
 export const openAround = (field: MineField, row: number, col: number) => {
   if (!field[row] || !field[row][col]) return field;
   if (field[row][col].state !== "open") return field;
@@ -261,6 +297,9 @@ export const openAround = (field: MineField, row: number, col: number) => {
   );
 };
 
+/**
+ * 対象マスの周囲のマス座標を取得
+ */
 export const getAroundCell = (field: MineField, row: number, col: number) =>
   [
     [row - 1, col - 1],
