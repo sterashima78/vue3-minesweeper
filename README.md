@@ -4,6 +4,10 @@ Vue 3 で作ったマインスイーパ
 
 https://sterashima78.github.io/vue3-minesweeper/
 
+
+![minesweeper](https://user-images.githubusercontent.com/45279563/83960403-6bddab80-a8c3-11ea-80b9-942cec38d6d7.gif)
+
+
 ## 気が付いたこと
 
 ### v-model

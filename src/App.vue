@@ -1,33 +1,15 @@
 <template>
   <Minesweeper />
+  <a href="https://github.com/sterashima78/vue3-minesweeper">View code</a>
 </template>
 
 <script lang="ts">
-import { defineComponent, ref, computed } from "vue";
+import { defineComponent } from "vue";
 import Minesweeper from "./components/Minesweeper.vue";
-import { initializerFactory, MineField, openCell, toGameState } from "@/domain";
 export default defineComponent({
   name: "App",
   components: {
     Minesweeper
-  },
-  setup() {
-    const row = ref(10);
-    const col = ref(10);
-    const mine = ref(10);
-    const init = computed(() => initializerFactory([], mine.value));
-    const field = ref<MineField>(init.value(row.value, col.value));
-    return {
-      mine,
-      row,
-      col,
-      init,
-      field,
-      open({ row, col }: { row: number; col: number }) {
-        field.value = openCell(field.value, row, col);
-      },
-      state: computed(() => toGameState(field.value))
-    };
   }
 });
 </script>
@@ -40,5 +22,9 @@ export default defineComponent({
   text-align: center;
   color: #2c3e50;
   margin-top: 60px;
+}
+a {
+  padding-top: 15px;
+  display: inline-block;
 }
 </style>
